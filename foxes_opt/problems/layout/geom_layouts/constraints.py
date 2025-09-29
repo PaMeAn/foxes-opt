@@ -633,6 +633,7 @@ class CFixN(Constraint):
         # therefore, we must seperate here.
         if isinstance(problem_results, tuple):
             __, valid = problem_results
+            vld = np.sum(valid)
 
         else:  # got xarray dataset as result
             # at the last loop (finalization), somehow there is no valid key anymore, so we need to restore it.
@@ -654,7 +655,7 @@ class CFixN(Constraint):
                 valid = arr_split[:, 0, :]  # new shape: (n_pop, nturbines)
                 # check with arr_split.std(axis = 1).max() to see if all states are the same
 
-        vld = np.sum(valid)
+                vld = np.sum(valid, axis=1)
 
         return np.array([self.N - vld, vld - self.N])
 
