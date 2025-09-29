@@ -628,8 +628,34 @@ class CFixN(Constraint):
             The component values, shape: (n_sel_components,)
 
         """
-        __, valid = problem_results
+        # problem_results can be a tuple of (xy coordinates, validity mask), or an xarray dataset including various variables, including X,Y and valid
+        # if problem_results is obtained from parallel evaluation of populations and different states, the length of states will be n_pop * n_states
+        # therefore, we must seperate here.
+        if isinstance(problem_results, tuple):
+            __, valid = problem_results
+
+        else:  # got xarray dataset as result
+            # at the last loop (finalization), somehow there is no valid key anymore, so we need to restore it.
+            if not "valid" in problem_results.keys():
+                # TODO: get real number of valid turbines
+                vld = self.N
+            else:
+
+                n_pop = int(problem_results["n_pop"].values)
+                n_org_states = int(problem_results["n_org_states"].values)
+                n_turbines = len(problem_results["turbine"])
+
+                # : shape (n_pop * n_states, ...)
+
+                arr_split = problem_results["valid"].values.reshape(
+                    n_pop, n_org_states, n_turbines
+                )
+                # take only the first state for each population, should be same coordinates
+                valid = arr_split[:, 0, :]  # new shape: (n_pop, nturbines)
+                # check with arr_split.std(axis = 1).max() to see if all states are the same
+
         vld = np.sum(valid)
+
         return np.array([self.N - vld, vld - self.N])
 
     def calc_population(self, vars_int, vars_float, problem_results, cmpnts=None):
@@ -654,8 +680,30 @@ class CFixN(Constraint):
             The component values, shape: (n_pop, n_sel_components)
 
         """
-        __, valid = problem_results
+
+        # problem_results can be a tuple of (xy coordinates, validity mask), or an xarray dataset including various variables, including X,Y and valid
+        # if problem_results is obtained from parallel evaluation of populations and different states, the length of states will be n_pop * n_states
+        # therefore, we must seperate here.
+        if isinstance(problem_results, tuple):
+            __, valid = problem_results
+
+        else:  # getting xarray as result
+
+            n_pop = int(problem_results["n_pop"].values)
+            n_org_states = int(problem_results["n_org_states"].values)
+            n_turbines = len(problem_results["turbine"])
+
+            # : shape (n_pop * n_states, ...)
+
+            arr_split = problem_results["valid"].values.reshape(
+                n_pop, n_org_states, n_turbines
+            )
+            # take only the first state for each population, should be same coordinates
+            valid = arr_split[:, 0, :]  # new shape: (n_pop, nturbines)
+            # check with arr_split.std(axis = 1).max() to see if all states are the same
+
         vld = np.sum(valid, axis=1)
+
         return np.stack([self.N - vld, vld - self.N], axis=-1)
 
 

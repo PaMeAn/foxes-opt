@@ -42,6 +42,7 @@ class RegularLayoutOptProblem(FarmVarsProblem):
         algo,
         min_spacing,
         initial_values=None,
+        staggered: bool = False,
         **kwargs,
     ):
         """
@@ -65,6 +66,7 @@ class RegularLayoutOptProblem(FarmVarsProblem):
         super().__init__(name, algo, **kwargs)
         self.min_spacing = min_spacing
         self.initial_values = initial_values
+        self.staggered = staggered
 
     def initialize(self, verbosity=1, **kwargs):
         """
@@ -261,6 +263,8 @@ class RegularLayoutOptProblem(FarmVarsProblem):
             + (ox + np.arange(nx)[:, None, None]) * dx * nax[None, None, :2]
             + (oy + np.arange(ny)[None, :, None]) * dy * nay[None, None, :2]
         )
+        if self.staggered:  # Stagger: shift every odd row by half dy in the y-direction
+            pts[1::2, :, :] += 0.5 * dy * nay[None, None, :2]
 
         pts = pts.reshape(nx * ny, 2)
         valid = self.farm.boundary.points_inside(pts)
@@ -323,7 +327,9 @@ class RegularLayoutOptProblem(FarmVarsProblem):
             * dy[:, None, None, None]
             * nay[:, None, None, :2]
         )
-    
+        if self.staggered:  # Stagger: shift every odd row by half dy in the y-direction
+            pts[:, 1::2, :, :] += 0.5 * dy[:, None, None, None] * nay[:, None, None, :2]
+
         qts = np.zeros((n_pop, n_turbines, 2))
         qts[:, :N] = pts.reshape(n_pop, N, 2)
         del pts
@@ -380,3 +386,205 @@ class RegularLayoutOptProblem(FarmVarsProblem):
         return FarmOptProblem.finalize_individual(
             self, vars_int, vars_float, verbosity=1
         )
+
+
+## alternative: add own class for staggered layout
+# # staggered Layout:
+# class StaggeredLayoutOptProblem(RegularLayoutOptProblem):
+#     """
+#     Places turbines on a regular grid and optimizes
+#     its parameters.
+
+#     Attributes
+#     ----------
+#     min_spacing: float
+#         The minimal turbine spacing
+
+#     :group: opt.problems.layout
+
+#     """
+
+#     SPACING_X = "spacing_x"
+#     SPACING_Y = "spacing_y"
+#     OFFSET_X = "offset_X"
+#     OFFSET_Y = "offset_Y"
+#     ANGLE = "angle"
+
+#     def opt2farm_vars_individual(self, vars_int, vars_float):
+#         """
+#         Translates optimization variables to farm variables
+
+#         Parameters
+#         ----------
+#         vars_int: numpy.ndarray
+#             The integer optimization variable values,
+#             shape: (n_vars_int,)
+#         vars_float: numpy.ndarray
+#             The float optimization variable values,
+#             shape: (n_vars_float,)
+
+#         Returns
+#         -------
+#         farm_vars: dict
+#             The foxes farm variables. Key: var name,
+#             value: numpy.ndarray with values, shape:
+#             (n_states, n_sel_turbines)
+
+#         """
+#         print("Here oder?")
+#         dx, dy, ox, oy, a = vars_float
+#         n_states = self.algo.n_states
+#         nx = self._nrow
+#         ny = self._nrow
+
+#         a = np.deg2rad(a)
+#         nax = np.array([np.cos(a), np.sin(a), 0.0], dtype=config.dtype_double)
+#         nay = np.cross(np.array([0.0, 0.0, 1.0], dtype=config.dtype_double), nax)
+
+#         pts = np.zeros((nx, ny, 2), dtype=config.dtype_double)
+#         pts[:] = (
+#             self._xy0[None, None, :]
+#             + (ox + np.arange(nx)[:, None, None]) * dx * nax[None, None, :2]
+#             + (oy + np.arange(ny)[None, :, None]) * dy * nay[None, None, :2]
+#         )
+#         # Stagger: shift every odd row by half dy in the y-direction
+#         pts[1::2, :, :] += 0.5 * dy * nay[None, None, :2]
+
+#         pts = pts.reshape(nx * ny, 2)
+#         valid = self.farm.boundary.points_inside(pts)
+
+#         farm_vars = {}
+#         for v, d in zip([FV.X, FV.Y, FC.VALID], [pts[:, 0], pts[:, 1], valid]):
+#             a = np.zeros((n_states, nx * ny), dtype=config.dtype_double)
+#             a[:] = d[None, :]
+#             farm_vars[v] = a
+
+#         return farm_vars
+
+#     def opt2farm_vars_population(self, vars_int, vars_float, n_states):
+#         """
+#         Translates optimization variables to farm variables
+
+#         Parameters
+#         ----------
+#         vars_int: numpy.ndarray
+#             The integer optimization variable values,
+#             shape: (n_pop, n_vars_int)
+#         vars_float: numpy.ndarray
+#             The float optimization variable values,
+#             shape: (n_pop, n_vars_float)
+#         n_states: int
+#             The number of original (non-pop) states
+
+#         Returns
+#         -------
+#         farm_vars: dict
+#             The foxes farm variables. Key: var name,
+#             value: numpy.ndarray with values, shape:
+#             (n_pop, n_states, n_sel_turbines)
+
+#         """
+#         n_pop = len(vars_float)
+#         n_turbines = self.farm.n_turbines
+#         dx = vars_float[:, 0]
+#         dy = vars_float[:, 1]
+#         ox = vars_float[:, 2]
+#         oy = vars_float[:, 3]
+#         nx = self._nrow
+#         ny = self._nrow
+#         a = vars_float[:, 4]
+#         N = self._nturb
+
+#         a = np.deg2rad(a)
+#         nax = np.stack([np.cos(a), np.sin(a), np.zeros_like(a)], axis=-1)
+#         naz = np.zeros_like(nax)
+#         naz[..., 2] = 1
+#         nay = np.cross(naz, nax)
+
+#         pts = np.zeros((n_pop, nx, ny, 2), dtype=config.dtype_double)
+#         pts[:] = (
+#             self._xy0[None, None, None, :]
+#             + (ox[:, None, None, None] + np.arange(nx)[None, :, None, None])
+#             * dx[:, None, None, None]
+#             * nax[:, None, None, :2]
+#             + (oy[:, None, None, None] + np.arange(ny)[None, None, :, None])
+#             * dy[:, None, None, None]
+#             * nay[:, None, None, :2]
+#         )
+#         # Stagger: shift every odd row by half dy in the y-direction
+#         pts[:, 1::2, :, :] += 0.5 * dy[:, None, None, None] * nay[:, None, None, :2]
+
+#         qts = np.zeros((n_pop, n_turbines, 2))
+#         qts[:, :N] = pts.reshape(n_pop, N, 2)
+#         del pts
+
+#         valid = self.farm.boundary.points_inside(
+#             qts.reshape(n_pop * n_turbines, 2)
+#         ).reshape(n_pop, n_turbines)
+
+#         farm_vars = {}
+#         for v, d in zip([FV.X, FV.Y, FC.VALID], [qts[:, :, 0], qts[:, :, 1], valid]):
+#             a = np.zeros((n_pop, n_states, n_turbines), dtype=config.dtype_double)
+#             a[:] = d[:, None, :]
+#             farm_vars[v] = a
+
+#         return farm_vars
+
+#     # def update_problem_individual(self, vars_int, vars_float):
+#     #     """
+#     #     Update the algo and other data using
+#     #     the latest optimization variables.
+
+#     #     This function is called before running the farm
+#     #     calculation.
+
+#     #     Parameters
+#     #     ----------
+#     #     vars_int: np.array
+#     #         The integer variable values, shape: (n_vars_int,)
+#     #     vars_float: np.array
+#     #         The float variable values, shape: (n_vars_float,)
+
+#     #     """
+#     #     print("FAILED")
+#     #     super().update_problem_individual(vars_int, vars_float)
+
+#     #     xy = vars_float.reshape(self.n_sel_turbines, 2)
+#     #     for i, ti in enumerate(self.sel_turbines):
+#     #         t = self.algo.farm.turbines[ti]
+#     #         t.xy = xy[i]
+
+#     # def update_problem_population(self, vars_int, vars_float):
+#     #     """
+#     #     Update the algo and other data using
+#     #     the latest optimization variables.
+
+#     #     This function is called before running the farm
+#     #     calculation.
+
+#     #     Parameters
+#     #     ----------
+#     #     vars_int: np.array
+#     #         The integer variable values, shape: (n_pop, n_vars_int,)
+#     #     vars_float: np.array
+#     #         The float variable values, shape: (n_pop, n_vars_float,)
+
+#     #     """
+#     #     print("FEILIIIII")
+#     #     super().update_problem_population(vars_int, vars_float)
+
+#     #     n_pop = len(vars_float)
+#     #     n_ostates = self._org_n_states
+#     #     n_states = n_pop * n_ostates
+
+#     #     xy = vars_float.reshape(n_pop, self.n_sel_turbines, 2)
+#     #     sxy = np.zeros(
+#     #         (n_pop, n_ostates, self.n_sel_turbines, 2), dtype=vars_float.dtype
+#     #     )
+#     #     sxy[:] = xy[:, None, :, :]
+#     #     sxy = sxy.reshape(n_states, self.n_sel_turbines, 2)
+#     #     del xy
+
+#     #     for i, ti in enumerate(self.sel_turbines):
+#     #         t = self.algo.farm.turbines[ti]
+#     #         t.xy = sxy[:, i]
