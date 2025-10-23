@@ -184,8 +184,12 @@ if __name__ == "__main__":
         foxes.output.FarmLayoutOutput(farm).get_figure(fig=fig, ax=axs[0])
 
         o = foxes.output.FlowPlots2D(algo, results.problem_results)
+        plt.show()
+        plt.savefig("layout_regular_grid_staggered.png", dpi=300)
+
         p_min = np.array([-1100.0, -1100.0])
         p_max = np.array([1100.0, 2000.0])
+
         fig = o.get_mean_fig_xy(
             "WS",
             resolution=20,
