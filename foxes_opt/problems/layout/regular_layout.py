@@ -131,22 +131,14 @@ class RegularLayoutOptProblem_OLD(FarmVarsProblem):
             self.ANGLE: 0.0,
         }
         if iniv is not None:
-            mins = {
-                v: m for v, m in zip(self.var_names_float(), self.min_values_float())
-            }
-            maxs = {
-                v: m for v, m in zip(self.var_names_float(), self.max_values_float())
-            }
+            mins = {v: m for v, m in zip(self.var_names_float(), self.min_values_float())}
+            maxs = {v: m for v, m in zip(self.var_names_float(), self.max_values_float())}
             for k, v in iniv.items():
                 assert (
                     k in self.initial_values
                 ), f"Invalid initial value key: '{k}', expected one of {list(self.initial_values.keys())}."
-                assert (
-                    v >= mins[k]
-                ), f"Initial value for '{k}' too small: {v} < {mins[k]}."
-                assert (
-                    v <= maxs[k]
-                ), f"Initial value for '{k}' too large: {v} > {maxs[k]}."
+                assert v >= mins[k], f"Initial value for '{k}' too small: {v} < {mins[k]}."
+                assert v <= maxs[k], f"Initial value for '{k}' too large: {v} > {maxs[k]}."
                 self.initial_values[k] = v
         if verbosity > 0:
             print(f"  initial values:")
@@ -355,9 +347,7 @@ class RegularLayoutOptProblem_OLD(FarmVarsProblem):
         qts[:, :N] = pts.reshape(n_pop, N, 2)
         del pts
 
-        valid = self.farm.boundary.points_inside(
-            qts.reshape(n_pop * n_turbines, 2)
-        ).reshape(n_pop, n_turbines)
+        valid = self.farm.boundary.points_inside(qts.reshape(n_pop * n_turbines, 2)).reshape(n_pop, n_turbines)
 
         farm_vars = {}
         for v, d in zip([FV.X, FV.Y, FC.VALID], [qts[:, :, 0], qts[:, :, 1], valid]):
@@ -404,9 +394,7 @@ class RegularLayoutOptProblem_OLD(FarmVarsProblem):
             t.name = f"T{i}"
         self.algo.update_n_turbines()
 
-        return FarmOptProblem.finalize_individual(
-            self, vars_int, vars_float, verbosity=1
-        )
+        return FarmOptProblem.finalize_individual(self, vars_int, vars_float, verbosity=1)
 
 
 class RegularLayoutOptProblem(FarmVarsProblem):
@@ -455,6 +443,8 @@ class RegularLayoutOptProblem(FarmVarsProblem):
         initial_values: dict, optional
             Initial values for opt variables, key:
             spacing_x, spacing_y, offset_x, offset_y, angle
+        staggered: bool, optional
+            Whether to use a staggered layout for the optimization process
         kwargs: dict, optional
             Additional parameters for `FarmVarsProblem`
 
@@ -528,22 +518,14 @@ class RegularLayoutOptProblem(FarmVarsProblem):
             self.ANGLE: 0.0,
         }
         if iniv is not None:
-            mins = {
-                v: m for v, m in zip(self.var_names_float(), self.min_values_float())
-            }
-            maxs = {
-                v: m for v, m in zip(self.var_names_float(), self.max_values_float())
-            }
+            mins = {v: m for v, m in zip(self.var_names_float(), self.min_values_float())}
+            maxs = {v: m for v, m in zip(self.var_names_float(), self.max_values_float())}
             for k, v in iniv.items():
                 assert (
                     k in self.initial_values
                 ), f"Invalid initial value key: '{k}', expected one of {list(self.initial_values.keys())}."
-                assert (
-                    v >= mins[k]
-                ), f"Initial value for '{k}' too small: {v} < {mins[k]}."
-                assert (
-                    v <= maxs[k]
-                ), f"Initial value for '{k}' too large: {v} > {maxs[k]}."
+                assert v >= mins[k], f"Initial value for '{k}' too small: {v} < {mins[k]}."
+                assert v <= maxs[k], f"Initial value for '{k}' too large: {v} > {maxs[k]}."
                 self.initial_values[k] = v
         if verbosity > 0:
             print(f"  initial values:")
@@ -678,12 +660,8 @@ class RegularLayoutOptProblem(FarmVarsProblem):
         pts = np.zeros((nx, ny, 2), dtype=config.dtype_double)
         pts[:] = (
             self._xy0[None, None, :]
-            + (ox + np.arange(-nx // 2, nx // 2)[:, None, None])
-            * dx
-            * nax[None, None, :2]
-            - +(oy + np.arange(-ny // 2, ny // 2)[None, :, None])
-            * dy
-            * nay[None, None, :2]
+            + (ox + np.arange(-nx // 2, nx // 2)[:, None, None]) * dx * nax[None, None, :2]
+            - +(oy + np.arange(-ny // 2, ny // 2)[None, :, None]) * dy * nay[None, None, :2]
         )
         if self.staggered:  # Stagger: shift every odd row by half dy in the y-direction
             pts[1::2, :, :] += 0.5 * dy * nay[None, None, :2]
@@ -742,16 +720,10 @@ class RegularLayoutOptProblem(FarmVarsProblem):
         pts = np.zeros((n_pop, nx, ny, 2), dtype=config.dtype_double)
         pts[:] = (
             self._xy0[None, None, None, :]
-            + (
-                ox[:, None, None, None]
-                + np.arange(-nx // 2, nx // 2)[None, :, None, None]
-            )
+            + (ox[:, None, None, None] + np.arange(-nx // 2, nx // 2)[None, :, None, None])
             * dx[:, None, None, None]
             * nax[:, None, None, :2]
-            + (
-                oy[:, None, None, None]
-                + np.arange(-ny // 2, ny // 2)[None, None, :, None]
-            )
+            + (oy[:, None, None, None] + np.arange(-ny // 2, ny // 2)[None, None, :, None])
             * dy[:, None, None, None]
             * nay[:, None, None, :2]
         )
@@ -762,9 +734,7 @@ class RegularLayoutOptProblem(FarmVarsProblem):
         qts[:, :N] = pts.reshape(n_pop, N, 2)
         del pts
 
-        valid = self.farm.boundary.points_inside(
-            qts.reshape(n_pop * n_turbines, 2)
-        ).reshape(n_pop, n_turbines)
+        valid = self.farm.boundary.points_inside(qts.reshape(n_pop * n_turbines, 2)).reshape(n_pop, n_turbines)
 
         farm_vars = {}
         for v, d in zip([FV.X, FV.Y, FC.VALID], [qts[:, :, 0], qts[:, :, 1], valid]):
@@ -811,9 +781,7 @@ class RegularLayoutOptProblem(FarmVarsProblem):
             t.name = f"T{i}"
         self.algo.update_n_turbines()
 
-        return FarmOptProblem.finalize_individual(
-            self, vars_int, vars_float, verbosity=1
-        )
+        return FarmOptProblem.finalize_individual(self, vars_int, vars_float, verbosity=1)
 
 
 ## alternative: add own class for staggered layout
